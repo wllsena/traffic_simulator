@@ -1,0 +1,18 @@
+[tool.poetry]
+name = "traffic_simulator"
+version = "0.1.0"
+description = ""
+authors = ["Will Sena <wllsena@protonmail.com>"]
+license = "Apache"
+
+[tool.poetry.dependencies]
+python = "^3.9"
+matplotlib = "^3.5.2"
+networkx = "^2.8.4"
+numpy = "^1.23.0"
+
+[tool.poetry.dev-dependencies]
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"

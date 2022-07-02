@@ -5,7 +5,10 @@ Style Guide: PEP 8. Column limit: 100.
 Author: William Sena <@wllsena>.
 """
 
+import uuid
+from concurrent.futures import ThreadPoolExecutor
 from random import choice, randint
+from threading import Lock
 from typing import Callable, List, Optional, Tuple
 
 import matplotlib.pyplot as plt
@@ -18,27 +21,44 @@ from networkx.generators.random_graphs import erdos_renyi_graph
 # index, on_street, velocity, odometer
 car_result = Tuple[int, int, int, int]
 
-# (self.n_crossing, self.n_streets, self.n_cars, car_results)
-city_result = Tuple[int, int, int, List[car_result]]
+# index, n_crossing, n_streets, n_cars, car_results
+city_result = Tuple[str, int, int, int, List[car_result]]
 
 
 class Crossing:
     index: int
+
     n_streets: int
     streets: List[int]
+    lock: Lock
+    streets_lock: List[Lock]
 
     def __init__(self, index: int):
         self.index = index
 
         self.n_streets = 0
         self.streets = []
+        self.lock = Lock()
+        self.streets_lock = []
 
     def add_street(self, street: int) -> None:
         self.n_streets += 1
         self.streets.append(street)
+        self.streets_lock.append(Lock())
 
-    def to_cross(self, index, street, new_street) -> None:
-        return None
+    def to_cross(self, street: int, new_street: int) -> None:
+        if new_street == street:
+            with self.lock:
+                if not self.streets_lock[self.streets.index(street)].locked():
+                    with self.streets_lock[self.streets.index(street)]:
+                        return None
+        else:
+            with self.lock:
+                if not (self.streets_lock[self.streets.index(street)].locked()
+                        or self.streets_lock[self.streets.index(new_street)].locked()):
+                    with (self.streets_lock[self.streets.index(street)],
+                          self.streets_lock[self.streets.index(new_street)]):
+                        return None
 
     def __str__(self) -> str:
         text = f'Crossing: index {self.index}. n_streets {self.n_streets}. streets {self.streets}.'
@@ -51,7 +71,9 @@ class Street:
     size: int
     crossings: Tuple[int, int]
     capacities: Tuple[int, int]
+
     populations: List[int]
+    lock: Lock
 
     def __init__(
         self,
@@ -67,14 +89,27 @@ class Street:
         self.capacities = capacities
 
         self.populations = [0, 0]
+        self.lock = Lock()
 
     def __str__(self) -> str:
         text = f'Street: index {self.index}. size {self.size}. crossings {self.crossings}. capacities {self.capacities}. populations {self.populations}'
 
         return text
 
-    def add_car(self, direction: int) -> None:
-        self.populations[direction] += 1
+    def enter(self, direction: int) -> bool:
+        with self.lock:
+            if self.populations[direction] < self.capacities[direction]:
+                self.populations[direction] += 1
+
+                return True
+
+        return False
+
+    def exit(self, direction: int) -> bool:
+        with self.lock:
+            self.populations[direction] -= 1
+
+        return True
 
 
 class Car:
@@ -83,6 +118,7 @@ class Car:
     direction: int
     position: int
     get_velocity: Callable[[], int]
+
     velocity: int
     odometer: int
     destiny: Optional[int]
@@ -100,14 +136,14 @@ class Car:
         self.on_street = on_street
         self.direction = direction
         self.position = position
-
         self.get_velocity = get_velocity
+
         self.velocity = self.get_velocity()
         self.odometer = 0
         self.destiny = None
 
     def update(self, crossings: List[Crossing], streets: List[Street]) -> Optional[car_result]:
-        street = streets[self.on_street]
+        street = [street for street in streets if street.index == self.on_street][0]
 
         if self.position == street.size:
             on_crossing = street.crossings[self.direction]
@@ -117,14 +153,11 @@ class Car:
             new_street = streets[new_on_street]
             new_direction = 1 if new_street.crossings[0] == on_crossing else 0
 
-            if new_street.populations[new_direction] < new_street.capacities[new_direction]:
-                crossing.to_cross(self.index, self.on_street, new_on_street)
+            if new_street.enter(new_direction) and street.exit(self.direction):
+                crossing.to_cross(self.on_street, new_on_street)
 
                 if new_on_street < 0:
                     return None
-
-                street.populations[self.direction] -= 1
-                new_street.populations[new_direction] += 1
 
                 self.on_street = new_on_street
                 self.direction = new_direction
@@ -151,35 +184,52 @@ class Car:
 
 
 class City:
+    n_processes: int
     graph: nx.classes.graph.Graph
     n_terminal_streets: int
-    n_streets: int
+    get_new_cars: Callable[[], int]
+    get_velocity: Callable[[], int]
+
+    index: str
+    n_crossings: int
     crossings: List[Crossing]
     n_streets: int
     streets: List[Street]
     n_cars: int
     cars: List[Car]
-    index_car: int
+    index_new_car: int
+    lock: Lock
+    car_index: int
 
     def __init__(
         self,
+        n_processes: int,
         n_crossing: int,
         prob_edge_creat: float,
         n_terminal_streets: int,
+        n_init_cars: int,
+        get_new_cars: Callable[[], int],
         get_size: Callable[[], int],
         get_capacities: Callable[[], Tuple[int, int]],
+        get_velocity: Callable[[], int],
     ) -> None:
 
+        self.n_processes = n_processes
         self.graph = erdos_renyi_graph(n_crossing, prob_edge_creat)
         self.n_terminal_streets = n_terminal_streets
+        self.get_new_cars = get_new_cars
+        self.get_velocity = get_velocity
 
+        self.index = str(uuid.uuid1())
         self.n_crossings = 0
         self.crossings = []
         self.n_streets = 0
         self.streets = []
         self.n_cars = 0
         self.cars = []
-        self.index_car = 0
+        self.index_new_car = 0
+        self.lock = Lock()
+        self.car_index = 0
 
         for index in self.graph.nodes():
             if not isinstance(index, int):
@@ -210,30 +260,52 @@ class City:
             self.crossings[crossing].add_street(index)
             self.graph.add_edge(index, crossing, index=index)
 
-    def add_car(self, get_velocity: Callable[[], int]) -> None:
+        for _ in range(n_init_cars):
+            self.add_car()
+
+    def add_car(self) -> None:
         street = randint(-self.n_terminal_streets, -1)
-        car = Car(self.index_car, street, 1, 0, get_velocity)
+        car = Car(self.index_new_car, street, 1, 0, self.get_velocity)
         self.n_cars += 1
         self.cars.append(car)
-        self.index_car += 1
-        self.streets[street].add_car(1)
+        self.index_new_car += 1
+        self.streets[street].enter(1)
 
-    def update(self) -> city_result:
+    def update(self, _) -> List[car_result]:
         car_results = []
 
-        new_cars = []
+        while True:
+            with self.lock:
+                car_index = self.car_index
+                self.car_index += 1
 
-        for car in self.cars:
-            car_result = car.update(self.crossings, self.streets)
+            if car_index >= self.n_cars:
+                return car_results
 
-            if car_result is not None:
-                car_results.append(car_result)
-                new_cars.append(car)
+            result = self.cars[car_index].update(self.crossings, self.streets)
 
-        self.n_cars = len(new_cars)
-        self.cars = new_cars
+            if result is not None:
+                car_results.append(result)
 
-        result = (self.n_crossings, self.n_streets, self.n_cars, car_results)
+    def run(self) -> city_result:
+        for _ in range(self.get_new_cars()):
+            self.add_car()
+
+        self.car_index = 0
+
+        car_results = []
+
+        with ThreadPoolExecutor(max_workers=self.n_processes) as pool:
+            results = pool.map(self.update, range(self.n_processes))
+            for result in results:
+                car_results += result
+
+        car_results_index = set(result[0] for result in car_results)
+
+        self.cars = [car for car in self.cars if car.index in car_results_index]
+        self.n_cars = len(self.cars)
+
+        result = (self.index, self.n_crossings, self.n_streets, self.n_cars, car_results)
 
         return result
 
