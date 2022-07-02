@@ -18,10 +18,10 @@ from networkx.generators.random_graphs import erdos_renyi_graph
 
 # -----
 
-# index, on_street, velocity, odometer
+# (index, on_street, velocity, odometer)
 car_result = Tuple[int, int, int, int]
 
-# index, n_crossing, n_streets, n_cars, car_results
+# (index, n_crossing, n_streets, n_cars, car_results)
 city_result = Tuple[str, int, int, int, List[car_result]]
 
 
@@ -49,16 +49,17 @@ class Crossing:
     def to_cross(self, street: int, new_street: int) -> None:
         if new_street == street:
             with self.lock:
-                if not self.streets_lock[self.streets.index(street)].locked():
-                    with self.streets_lock[self.streets.index(street)]:
-                        return None
+                self.streets_lock[self.streets.index(street)].acquire()
+
+            self.streets_lock[self.streets.index(street)].release()
+
         else:
             with self.lock:
-                if not (self.streets_lock[self.streets.index(street)].locked()
-                        or self.streets_lock[self.streets.index(new_street)].locked()):
-                    with (self.streets_lock[self.streets.index(street)],
-                          self.streets_lock[self.streets.index(new_street)]):
-                        return None
+                self.streets_lock[self.streets.index(street)].acquire()
+                self.streets_lock[self.streets.index(new_street)].acquire()
+
+            self.streets_lock[self.streets.index(street)].release()
+            self.streets_lock[self.streets.index(new_street)].release()
 
     def __str__(self) -> str:
         text = f'Crossing: index {self.index}. n_streets {self.n_streets}. streets {self.streets}.'
@@ -116,9 +117,9 @@ class Car:
     index: int
     on_street: int
     direction: int
-    position: int
     get_velocity: Callable[[], int]
 
+    position: int
     velocity: int
     odometer: int
     destiny: Optional[int]
@@ -128,16 +129,15 @@ class Car:
         index: int,
         on_street: int,
         direction: int,
-        position: int,
         get_velocity: Callable[[], int],
     ):
 
         self.index = index
         self.on_street = on_street
         self.direction = direction
-        self.position = position
         self.get_velocity = get_velocity
 
+        self.position = 0
         self.velocity = self.get_velocity()
         self.odometer = 0
         self.destiny = None
@@ -265,7 +265,7 @@ class City:
 
     def add_car(self) -> None:
         street = randint(-self.n_terminal_streets, -1)
-        car = Car(self.index_new_car, street, 1, 0, self.get_velocity)
+        car = Car(self.index_new_car, street, 1, self.get_velocity)
         self.n_cars += 1
         self.cars.append(car)
         self.index_new_car += 1
