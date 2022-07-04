@@ -6,9 +6,10 @@ Author: William Sena <@wllsena>.
 """
 
 import uuid
-from concurrent.futures import ThreadPoolExecutor
+from multiprocessing import Lock
+from multiprocessing.pool import ThreadPool
 from random import choice, randint
-from threading import Lock
+from time import sleep
 from typing import Callable, List, Optional, Tuple
 
 import matplotlib.pyplot as plt
@@ -30,8 +31,9 @@ class Crossing:
 
     n_streets: int
     streets: List[int]
-    butler: Lock
-    streets_lock: List[Lock]
+
+    #butler
+    #streets_lock
 
     def __init__(self, index: int):
         self.index = index
@@ -46,7 +48,7 @@ class Crossing:
         self.streets.append(street)
         self.streets_lock.append(Lock())
 
-    def to_cross(self, street: int, new_street: int) -> None:
+    def to_cross(self, street: int, new_street: int, delay: float = 0) -> None:
         if new_street == street:
             with self.butler:
                 self.streets_lock[self.streets.index(street)].acquire()
@@ -57,6 +59,8 @@ class Crossing:
             with self.butler:
                 self.streets_lock[self.streets.index(street)].acquire()
                 self.streets_lock[self.streets.index(new_street)].acquire()
+
+            sleep(delay)
 
             self.streets_lock[self.streets.index(street)].release()
             self.streets_lock[self.streets.index(new_street)].release()
@@ -74,7 +78,8 @@ class Street:
     capacities: Tuple[int, int]
 
     populations: List[int]
-    butler: Lock
+
+    #butler
 
     def __init__(
         self,
@@ -198,7 +203,7 @@ class City:
     n_cars: int
     cars: List[Car]
     index_new_car: int
-    butler: Lock
+    # butler
     car_index: int
 
     def __init__(
@@ -295,7 +300,7 @@ class City:
 
         car_results = []
 
-        with ThreadPoolExecutor(max_workers=self.n_processes) as pool:
+        with ThreadPool(processes=self.n_processes) as pool:
             results = pool.map(self.update, range(self.n_processes))
             for result in results:
                 car_results += result
