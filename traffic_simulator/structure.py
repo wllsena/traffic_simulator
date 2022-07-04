@@ -30,7 +30,7 @@ class Crossing:
 
     n_streets: int
     streets: List[int]
-    lock: Lock
+    butler: Lock
     streets_lock: List[Lock]
 
     def __init__(self, index: int):
@@ -38,7 +38,7 @@ class Crossing:
 
         self.n_streets = 0
         self.streets = []
-        self.lock = Lock()
+        self.butler = Lock()
         self.streets_lock = []
 
     def add_street(self, street: int) -> None:
@@ -48,13 +48,13 @@ class Crossing:
 
     def to_cross(self, street: int, new_street: int) -> None:
         if new_street == street:
-            with self.lock:
+            with self.butler:
                 self.streets_lock[self.streets.index(street)].acquire()
 
             self.streets_lock[self.streets.index(street)].release()
 
         else:
-            with self.lock:
+            with self.butler:
                 self.streets_lock[self.streets.index(street)].acquire()
                 self.streets_lock[self.streets.index(new_street)].acquire()
 
@@ -74,7 +74,7 @@ class Street:
     capacities: Tuple[int, int]
 
     populations: List[int]
-    lock: Lock
+    butler: Lock
 
     def __init__(
         self,
@@ -90,7 +90,7 @@ class Street:
         self.capacities = capacities
 
         self.populations = [0, 0]
-        self.lock = Lock()
+        self.butler = Lock()
 
     def __str__(self) -> str:
         text = f'Street: index {self.index}. size {self.size}. crossings {self.crossings}. capacities {self.capacities}. populations {self.populations}'
@@ -98,7 +98,7 @@ class Street:
         return text
 
     def enter(self, direction: int) -> bool:
-        with self.lock:
+        with self.butler:
             if self.populations[direction] < self.capacities[direction]:
                 self.populations[direction] += 1
 
@@ -107,7 +107,7 @@ class Street:
         return False
 
     def exit(self, direction: int) -> bool:
-        with self.lock:
+        with self.butler:
             self.populations[direction] -= 1
 
         return True
@@ -198,7 +198,7 @@ class City:
     n_cars: int
     cars: List[Car]
     index_new_car: int
-    lock: Lock
+    butler: Lock
     car_index: int
 
     def __init__(
@@ -228,7 +228,7 @@ class City:
         self.n_cars = 0
         self.cars = []
         self.index_new_car = 0
-        self.lock = Lock()
+        self.butler = Lock()
         self.car_index = 0
 
         for index in self.graph.nodes():
@@ -275,7 +275,7 @@ class City:
         car_results = []
 
         while True:
-            with self.lock:
+            with self.butler:
                 car_index = self.car_index
                 self.car_index += 1
 

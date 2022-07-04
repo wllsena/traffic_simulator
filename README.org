@@ -22,7 +22,7 @@ Adiciona a rua de index **street** ao cruzamento.
 
 *** Método to_cross(street: int, new_street: int) -> None
 
-Permite o cruzamento de um carro. Primeiro trava o lock self.lock, significa que somente um carro pode decidir fazer o cruzamento por vez, em diante trava os locks correspondentes da ruas de origem de index **street** e de destino de index **new_street**, então destrava o lock inicial e somente depois destrava os locks das ruas, significa que o cruzamento foi feito. Mais de um carro podem fazer o cruzamento em paralelo caso não aja conflito de locks das ruas.
+Permite o cruzamento de um carro. Primeiro trava o lock self.butler, significa que somente um carro pode decidir fazer o cruzamento por vez, em diante trava os locks correspondentes da ruas de origem de index **street** e de destino de index **new_street**, então destrava o butler e somente depois destrava os locks das ruas, significa que o cruzamento foi feito. Mais de um carro podem fazer o cruzamento em paralelo caso não aja conflito de locks das ruas.
 
 ** Street(index: int, size: int, crossings: Tuple[int, int], capacities: Tuple[int, int])
 
@@ -30,11 +30,11 @@ Rua com parâmetros index, tamanho da rua, tupla com o indexes dos cruzamento es
 
 *** Método enter(direction: int) -> bool
 
-Permite a entrada de um carro. Primeiro trava o lock self.lock, significa que somente um carro pode decidir entrar ou sair da rua por vez, então checa se a população da rua na via **direction** é menor que sua capacidade, se sim aumenta o população da via em 1 e retorna True, caso contrário somente retorna False.
+Permite a entrada de um carro. Primeiro trava o lock self.butler, significa que somente um carro pode decidir entrar ou sair da rua por vez, então checa se a população da rua na via **direction** é menor que sua capacidade, se sim aumenta o população da via em 1 e retorna True, caso contrário somente retorna False. Essa é a solução do mordomo.
 
 *** Método exit(direction: int) -> bool
 
-Permite a saída de um carro. Primeiro trava o lock self.lock, significa que somente um carro pode decidir entrar ou sair na rua por vez, então diminui a população da via **direction** em 1 e retorna True.
+Permite a saída de um carro. Primeiro trava o lock self.butler, significa que somente um carro pode decidir entrar ou sair na rua por vez, então diminui a população da via **direction** em 1 e retorna True.
 
 ** Car(index: int, on_Street: int, direction: int, get_velocity: Callable[[], int])
 
@@ -54,7 +54,7 @@ Adiciona um novo carro a uma rua terminal aleatória.
 
 *** Método update(_) -> List[car_result]
 
-É rodado por um determinado processo. Dentro de um loop, trava o lock self.lock, obtém o index do próximo carro disponível e destrava o lock. Se não tiver carro com esse index retorna o resultado de todas as atualizações de carros rodadas por esse processo, se tiver, faz a atualização do carro correspondente. Carros que retornarem None São descartados posteriormente.
+É rodado por um determinado processo. Dentro de um loop, trava o lock self.butler, obtém o index do próximo carro disponível e destrava o butler. Se não tiver carro com esse index retorna o resultado de todas as atualizações de carros rodadas por esse processo, se tiver, faz a atualização do carro correspondente. Carros que retornarem None São descartados posteriormente.
 
 *** Método run() -> city_result
 
