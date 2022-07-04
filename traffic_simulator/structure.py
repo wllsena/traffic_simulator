@@ -22,8 +22,8 @@ from networkx.generators.random_graphs import erdos_renyi_graph
 # (index, on_street, velocity, odometer)
 car_result = Tuple[int, int, int, int]
 
-# (index, n_crossing, n_streets, n_cars, car_results)
-city_result = Tuple[str, int, int, int, List[car_result]]
+# (index, steps, n_crossing, n_streets, n_cars, car_results)
+city_result = Tuple[str, int, int, int, int, List[car_result]]
 
 
 class Crossing:
@@ -196,6 +196,7 @@ class City:
     get_velocity: Callable[[], int]
 
     index: str
+    steps: int
     n_crossings: int
     crossings: List[Crossing]
     n_streets: int
@@ -225,7 +226,8 @@ class City:
         self.get_new_cars = get_new_cars
         self.get_velocity = get_velocity
 
-        self.index = str(uuid.uuid1())
+        self.index = str(uuid.uuid1()).replace('-', '_')
+        self.steps = 0
         self.n_crossings = 0
         self.crossings = []
         self.n_streets = 0
@@ -293,6 +295,8 @@ class City:
                 car_results.append(result)
 
     def run(self) -> city_result:
+        self.steps += 1
+
         for _ in range(self.get_new_cars()):
             self.add_car()
 
@@ -310,7 +314,8 @@ class City:
         self.cars = [car for car in self.cars if car.index in car_results_index]
         self.n_cars = len(self.cars)
 
-        result = (self.index, self.n_crossings, self.n_streets, self.n_cars, car_results)
+        result = (self.index, self.steps, self.n_crossings, self.n_streets, self.n_cars,
+                  car_results)
 
         return result
 
